@@ -8,10 +8,6 @@
 #define MININSF_PI_F 3.14159265358979323846f
 #endif
 
-#ifndef MININSF_CUDA_SCAN_ADJUST_PERIOD
-#define MININSF_CUDA_SCAN_ADJUST_PERIOD 48
-#endif
-
 static float mininsf_sin_2pi_approx(float phase) {
     float x;
     float x2;
@@ -100,10 +96,6 @@ static int mininsf_fastsinegen_impl_f32(
                     0.5f * ds0 * n * (n - 1.0f) / (float)config->upsample;
                 const float rad2 = fmodf(rad_last + 0.5f, 1.0f) - 0.5f;
                 phase_sum += rad2;
-                if (MININSF_CUDA_SCAN_ADJUST_PERIOD > 0 &&
-                    ((t + 1) % MININSF_CUDA_SCAN_ADJUST_PERIOD) == 0) {
-                    phase_sum = nextafterf(phase_sum, -INFINITY);
-                }
             }
         }
     }
@@ -158,10 +150,6 @@ static int mininsf_fastsinegen_fast_two_pass_f32(
 
             phase_offsets[b * n_frames + t] = fmodf(phase_sum, 1.0f);
             phase_sum += rad2;
-            if (MININSF_CUDA_SCAN_ADJUST_PERIOD > 0 &&
-                ((t + 1) % MININSF_CUDA_SCAN_ADJUST_PERIOD) == 0) {
-                phase_sum = nextafterf(phase_sum, -INFINITY);
-            }
         }
     }
 

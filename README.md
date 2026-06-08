@@ -1,7 +1,7 @@
 # libmininsf
 
 `libmininsf` is a small C implementation of the MiniNSF source generator used by
-OpenVPI DiffSinger's NSF-HiFiGAN vocoder.
+OpenVPI DiffSinger's NSF-HiFiGAN vocoder export path.
 
 The original NSF idea comes from the Neural Source-Filter work by the
 Yamagishi laboratory:
@@ -9,8 +9,7 @@ Yamagishi laboratory:
 - https://github.com/nii-yamagishilab/project-NN-Pytorch-scripts/tree/master/project/01-nsf
 
 MiniNSF here refers to the simplified `fastsinegen(f0)` source path used by
-OpenVPI DiffSinger. The implementation is tuned against the official Torch CUDA
-behavior of this function:
+OpenVPI DiffSinger:
 
 - https://github.com/openvpi/DiffSinger/blob/main/modules/nsf_hifigan/models.py#L254
 
@@ -135,30 +134,59 @@ or set the platform library search path:
 
 ## Accuracy And Performance
 
-DiffSinger vocoders are trained with the Torch implementation, so the primary
-accuracy target is Torch CUDA `Generator.fastsinegen(f0)`, not the ONNX CPU
-export and not Torch CPU. PyTorch CUDA uses a different float32 prefix-sum
-rounding path for `rad2.cumsum(dim=1).fmod(1.0)`, so `libmininsf` applies a
-small periodic downward float adjustment to better match that baseline on CPU.
-
-Local benchmark on wav file, 20 s segment, official
-`pc_nsf_hifigan_44.1k_hop512_128bin_2025.02` Torch CUDA vocoder baseline:
-
-| source path | nsf ms | wav SNR vs Torch CUDA | mel SNR vs Torch CUDA |
-| --- | ---: | ---: | ---: |
-| ONNX CPU / NumPy float scan | 1.86 | 62.90 dB | 77.72 dB |
-| ONNX DML internal NSF | 1.61 | 68.33 dB | 83.50 dB |
-| libmininsf fast | 0.54 | 68.44 dB | 83.31 dB |
-| Torch CUDA source | 2.91 | 113.13 dB | 116.11 dB |
-
-The fast path uses a polynomial sine approximation and OpenMP frame parallelism
-for larger inputs. The exact path uses `sinf` but keeps the same Torch CUDA
-phase-accumulation alignment.
+The exact path is intended to closely match the CPU/NumPy semantics of
+DiffSinger's `fastsinegen`: float32 phase accumulation, `fmod`, and sine source
+generation without implementation-specific CUDA prefix-scan adjustment. The
+fast path keeps the same phase semantics and trades a small sine approximation
+error for lower latency. In local tests against the DiffSinger ONNX CPU output,
+the fast path stayed around `3e-6` max absolute error for common vocal f0
+ranges.
 
 OpenMP acceleration is only used by the fast path for larger inputs. The phase
 offsets are computed sequentially, then frames are generated in parallel with
 SIMD hints. This preserves the frame-to-frame phase dependency while exposing
 most of the sample generation work to the compiler and runtime.
+
+## CUDA Alignment Notes
+
+DiffSinger vocoders are usually trained with the Torch CUDA implementation of
+`Generator.fastsinegen(f0)`. For the official
+`pc_nsf_hifigan_44.1k_hop512_128bin_2025.02` checkpoint, Torch CUDA is therefore
+the training-side baseline.
+
+We tested a CPU-side phase adjustment that nudges the accumulated phase to
+better match Torch CUDA's `rad2.cumsum(dim=1).fmod(1.0)` output. This helped one
+non-transposed validation segment, but it did not generalize to pitch-shifted
+f0. On a 20 s vocal segment:
+
+| path | original f0 wav SNR vs Torch CUDA | +4 semitone wav SNR vs Torch CUDA |
+| --- | ---: | ---: |
+| ONNX DML full vocoder | 68.33 dB | 77.53 dB |
+| libmininsf initial CPU/NumPy phase path + external DML generator | 62.90 dB | 56.84 dB |
+| experimental CUDA-adjusted libmininsf + external DML generator | 68.44 dB | 62.12 dB |
+
+The result indicates that the CUDA adjustment is fitting an implementation
+detail of Torch/CUB prefix scan for one f0 distribution, not a stable MiniNSF
+semantic. The adjustment is therefore not used on `main`.
+
+The experimental implementation is preserved on the
+`cuda-align-experimental` branch for reference and future investigation.
+
+## Recommended Path
+
+Use the `main` implementation as the stable MiniNSF source generator. It is the
+original CPU/NumPy-aligned path and is the recommended semantic target for new
+exports or future vocoder training.
+
+For existing Torch-CUDA-trained DiffSinger checkpoints, keep using the original
+full ONNX vocoder path when pitch control changes f0 at inference time. If a
+deployment splits MiniNSF out into `libmininsf + external generator`, validate
+that exact checkpoint and pitch-control range before enabling it in production.
+
+For future training, the cleanest long-term option is to train or fine-tune the
+generator with this stable MiniNSF source path from the start. That removes the
+dependency on CUDA prefix-scan rounding and makes CPU, DML, and other platforms
+share the same source semantics.
 
 ## Notes
 
