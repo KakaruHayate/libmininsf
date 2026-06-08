@@ -1,7 +1,7 @@
 # libmininsf
 
 `libmininsf` is a small C implementation of the MiniNSF source generator used by
-OpenVPI DiffSinger's NSF-HiFiGAN vocoder export path.
+OpenVPI DiffSinger's NSF-HiFiGAN vocoder.
 
 The original NSF idea comes from the Neural Source-Filter work by the
 Yamagishi laboratory:
@@ -9,7 +9,8 @@ Yamagishi laboratory:
 - https://github.com/nii-yamagishilab/project-NN-Pytorch-scripts/tree/master/project/01-nsf
 
 MiniNSF here refers to the simplified `fastsinegen(f0)` source path used by
-OpenVPI DiffSinger:
+OpenVPI DiffSinger. The implementation is tuned against the official Torch CUDA
+behavior of this function:
 
 - https://github.com/openvpi/DiffSinger/blob/main/modules/nsf_hifigan/models.py#L254
 
@@ -134,10 +135,25 @@ or set the platform library search path:
 
 ## Accuracy And Performance
 
-The exact path is intended to closely match an ONNX export of DiffSinger's
-`fastsinegen`. The fast path trades a small sine approximation error for lower
-latency. In local tests against the DiffSinger ONNX CPU output, the fast path
-stayed around `3e-6` max absolute error for common vocal f0 ranges.
+DiffSinger vocoders are trained with the Torch implementation, so the primary
+accuracy target is Torch CUDA `Generator.fastsinegen(f0)`, not the ONNX CPU
+export and not Torch CPU. PyTorch CUDA uses a different float32 prefix-sum
+rounding path for `rad2.cumsum(dim=1).fmod(1.0)`, so `libmininsf` applies a
+small periodic downward float adjustment to better match that baseline on CPU.
+
+Local benchmark on wav file, 20 s segment, official
+`pc_nsf_hifigan_44.1k_hop512_128bin_2025.02` Torch CUDA vocoder baseline:
+
+| source path | nsf ms | wav SNR vs Torch CUDA | mel SNR vs Torch CUDA |
+| --- | ---: | ---: | ---: |
+| ONNX CPU / NumPy float scan | 1.86 | 62.90 dB | 77.72 dB |
+| ONNX DML internal NSF | 1.61 | 68.33 dB | 83.50 dB |
+| libmininsf fast | 0.54 | 68.44 dB | 83.31 dB |
+| Torch CUDA source | 2.91 | 113.13 dB | 116.11 dB |
+
+The fast path uses a polynomial sine approximation and OpenMP frame parallelism
+for larger inputs. The exact path uses `sinf` but keeps the same Torch CUDA
+phase-accumulation alignment.
 
 OpenMP acceleration is only used by the fast path for larger inputs. The phase
 offsets are computed sequentially, then frames are generated in parallel with
