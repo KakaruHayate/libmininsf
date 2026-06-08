@@ -11,7 +11,7 @@ Yamagishi laboratory:
 MiniNSF here refers to the simplified `fastsinegen(f0)` source path used by
 OpenVPI DiffSinger:
 
-- https://github.com/openvpi/DiffSinger
+- https://github.com/openvpi/DiffSinger/blob/main/modules/nsf_hifigan/models.py#L254
 
 For the 44.1 kHz / hop 512 / 128-bin DiffSinger vocoder, the default MiniNSF
 configuration is:
@@ -104,6 +104,33 @@ int mininsf_source_conv1x1_f32(
 
 `f0` is contiguous `[batch, n_frames]` float32 Hz. `output` is contiguous
 `[batch, 1, n_frames * upsample]` float32.
+
+## Examples
+
+C:
+
+```sh
+cmake --build build --config Release --target write_source_c
+```
+
+C++:
+
+```sh
+cmake --build build --config Release --target write_source_cpp
+```
+
+C# / .NET P/Invoke:
+
+```sh
+dotnet run --project examples/csharp/MininsfExample.csproj
+```
+
+For the C# example, place the native library where the .NET runtime can find it,
+or set the platform library search path:
+
+- Windows: `mininsf.dll` next to the executable, or on `PATH`
+- Linux: `libmininsf.so` next to the executable, or on `LD_LIBRARY_PATH`
+- macOS: `libmininsf.dylib` next to the executable, or on `DYLD_LIBRARY_PATH`
 
 ## Accuracy And Performance
 

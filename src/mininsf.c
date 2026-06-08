@@ -153,10 +153,12 @@ static int mininsf_fastsinegen_fast_two_pass_f32(
         }
     }
 
+    int64_t bt;
+
 #if defined(_OPENMP)
 #pragma omp parallel for schedule(static) if(total_frames >= 256)
 #endif
-    for (int64_t bt = 0; bt < total_frames; ++bt) {
+    for (bt = 0; bt < total_frames; ++bt) {
         const int64_t b_idx = bt / n_frames;
         const int64_t t = bt - b_idx * n_frames;
         const float *f0_b = f0 + b_idx * n_frames;
@@ -170,7 +172,7 @@ static int mininsf_fastsinegen_fast_two_pass_f32(
         const float inv_upsample = 1.0f / (float)config->upsample;
         int32_t k;
 
-#if defined(_OPENMP)
+#if defined(_OPENMP) && !defined(_MSC_VER)
 #pragma omp simd
 #endif
         for (k = 0; k < config->upsample; ++k) {
