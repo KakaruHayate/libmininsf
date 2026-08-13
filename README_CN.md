@@ -133,3 +133,13 @@ DiffSinger vocoder 通常以 `Generator.fastsinegen(f0)` 的 Torch CUDA 实现�
 ## 说明
 
 本项目仅实现 DiffSinger 导出 vocoder 路径使用的 MiniNSF 正弦源，不是原始 NSF 模型族的完整实现。
+
+## 许可
+
+| 组件 | 许可 |
+|---|---|
+| 本仓库（代码） | MIT（见 `LICENSE`） |
+| OpenVPI DiffSinger（参考实现） | MIT |
+| 山岸实验室 NSF 脚本（原始概念，仅作参考，未 vendor） | 见上游仓库 |
+
+本仓库不分发任何二进制或模型权重。
